@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>BeatJev</title>
+<meta name="description" content="Race an AI on 25 spam messages. Can you out-click Jev?">
+<meta property="og:title" content="BeatJev">
+<meta property="og:description" content="Race an AI on 25 spam messages. Can you out-click Jev?">
+<meta name="theme-color" content="#0b0d10">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+<link rel="modulepreload" href="/app.js">
+<link rel="modulepreload" href="/messages.js">
+<style>
+  :root {
+    --bg: #0b0d10; --panel: #151920; --line: #262c36; --text: #eef1f5; --muted: #8a94a3;
+    --spam: #ff5a5f; --ham: #2ecc8f; --accent: #ffd23f;
+    color-scheme: dark;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #f6f7f9; --panel: #fff; --line: #dde1e7; --text: #11151a; --muted: #5d6673;
+            --spam: #e0383e; --ham: #139e68; --accent: #c79400; color-scheme: light; }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 16px/1.4 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex; justify-content: center;
+    -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  }
+  main {
+    width: 100%; max-width: 560px; min-height: 100dvh;
+    padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+    display: flex; flex-direction: column;
+  }
+  .screen { display: none; flex: 1; flex-direction: column; }
+  .screen.on { display: flex; }
+  h1 { font-size: clamp(40px, 12vw, 64px); margin: 0; letter-spacing: -0.03em; line-height: 1; }
+  h1 span { color: var(--accent); }
+  .muted { color: var(--muted); }
+  .center { margin: auto 0; text-align: center; }
+  .tabnum { font-variant-numeric: tabular-nums; }
+
+  button { font: inherit; color: inherit; border: 0; cursor: pointer; }
+  .primary {
+    background: var(--accent); color: #111; font-weight: 800; font-size: 20px;
+    padding: 18px 24px; border-radius: 14px; width: 100%;
+  }
+  .primary:active { transform: scale(0.98); }
+  .ghost { background: var(--panel); border: 1px solid var(--line); padding: 14px; border-radius: 12px; font-weight: 600; width: 100%; }
+
+  /* round */
+  .bar { display: flex; justify-content: space-between; align-items: center; font-weight: 700; }
+  .progress { height: 4px; background: var(--line); border-radius: 2px; margin: 10px 0 0; overflow: hidden; }
+  .progress i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .3s; }
+  .stage { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 16px; padding: 16px 0; }
+  .count { font-size: 34vmin; font-weight: 900; text-align: center; line-height: 1; }
+  .count.tick { animation: pop .5s ease-out; }
+  @keyframes pop { from { transform: scale(1.35); opacity: .3; } to { transform: scale(1); opacity: 1; } }
+  .msg {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    padding: 18px; font-size: clamp(18px, 5vw, 22px); line-height: 1.35;
+  }
+  .choices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .choice {
+    padding: 22px 8px; border-radius: 14px; font-size: 18px; font-weight: 800;
+    background: var(--panel); border: 2px solid var(--line); user-select: none;
+  }
+  .choice.spam { border-color: var(--spam); }
+  .choice.ham { border-color: var(--ham); }
+  .choice:disabled { opacity: .35; cursor: default; }
+  .choice.picked { opacity: 1; }
+  .choice.spam.picked { background: var(--spam); color: #fff; }
+  .choice.ham.picked { background: var(--ham); color: #fff; }
+
+  .duel { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px; min-height: 108px; }
+  .card h3 { margin: 0 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); display: flex; justify-content: space-between; }
+  .card .verdict { font-weight: 800; font-size: 17px; }
+  .card .time { font-size: 26px; font-weight: 900; }
+  .card .sub { font-size: 13px; color: var(--muted); }
+  .card.win { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+  .ok { color: var(--ham); } .bad { color: var(--spam); }
+  .conf { height: 6px; border-radius: 3px; background: linear-gradient(90deg, var(--ham), var(--spam)); position: relative; margin: 8px 0 2px; }
+  .conf b { position: absolute; top: -4px; width: 3px; height: 14px; background: var(--text); border-radius: 2px; transform: translateX(-50%); }
+  .thinking::after { content: "…"; animation: blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .next { text-align: center; font-size: 14px; min-height: 20px; }
+
+  /* results */
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 16px 0; }
+  .big { font-size: clamp(28px, 9vw, 40px); font-weight: 900; }
+  .headline { font-size: clamp(24px, 7vw, 32px); font-weight: 900; text-align: center; margin: 12px 0 0; letter-spacing: -0.02em; }
+  .stack { display: grid; gap: 10px; }
+  canvas { width: 100%; border-radius: 14px; border: 1px solid var(--line); }
+  .badge { display: inline-block; font-size: 12px; font-weight: 800; padding: 2px 8px; border-radius: 99px; background: var(--spam); color: #fff; }
+  @media (prefers-reduced-motion: reduce) { .count.tick, .thinking::after { animation: none; } }
+</style>
+</head>
+<body>
+<main>
+  <section id="start" class="screen on">
+    <div class="center stack" style="gap:20px">
+      <h1>Beat<span>Jev</span></h1>
+      <p style="font-size:19px;margin:0">25 messages. Spam or not?<br>You vs. an AI, <b>live</b>, on every one.</p>
+      <p class="muted" style="margin:0">Tap as fast as you can when the message appears. Jev gets the same message at the same instant.</p>
+      <button id="go" class="primary">Start the race</button>
+    </div>
+  </section>
+
+  <section id="round" class="screen">
+    <div class="bar tabnum"><span id="roundLabel">Round 1/25</span><span id="score" class="muted">You 0 · Jev 0</span></div>
+    <div class="progress"><i id="progress"></i></div>
+    <div class="stage">
+      <div id="count" class="count tabnum" aria-live="assertive"></div>
+      <div id="play" hidden class="stack" style="gap:14px">
+        <div id="msg" class="msg"></div>
+        <div class="choices">
+          <button class="choice spam" data-spam="1">🚫 SPAM</button>
+          <button class="choice ham" data-spam="0">✅ NOT SPAM</button>
+        </div>
+        <div class="duel">
+          <div id="youCard" class="card"><h3>You <span id="youMark"></span></h3><div id="youBody" class="muted thinking">waiting on you</div></div>
+          <div id="jevCard" class="card"><h3>Jev <span id="jevMark"></span></h3><div id="jevBody" class="muted thinking">thinking</div></div>
+        </div>
+        <div id="next" class="next muted" aria-live="polite"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="results" class="screen">
+    <p class="headline" id="headline"></p>
+    <div class="grid tabnum">
+      <div class="card"><h3>You · avg</h3><div class="big" id="rYouAvg"></div><div class="sub" id="rYouTot"></div></div>
+      <div class="card"><h3>Jev · avg</h3><div class="big" id="rJevAvg"></div><div class="sub" id="rJevTot"></div></div>
+      <div class="card"><h3>You · correct</h3><div class="big" id="rYouAcc"></div></div>
+      <div class="card"><h3>Jev · correct</h3><div class="big" id="rJevAcc"></div><div class="sub" id="rJevMiss"></div></div>
+    </div>
+    <canvas id="shareCanvas" width="1200" height="675" aria-label="Result card"></canvas>
+    <p class="muted" style="font-size:13px">Jev's time is measured server-side, around the API call only. Yours runs from the moment the message appears to your tap.</p>
+    <div class="stack">
+      <a id="tweet" class="primary" style="text-align:center;text-decoration:none" target="_blank" rel="noopener">Share on X</a>
+      <button id="shareImg" class="ghost">Share result image</button>
+      <button id="again" class="ghost">Play again</button>
+    </div>
+  </section>
+</main>
+<script type="module" src="/app.js"></script>
+</body>
+</html>
